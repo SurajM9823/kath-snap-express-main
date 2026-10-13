@@ -10,8 +10,6 @@ firebase-service-account.json
 # Node modules
 node_modules/
 
-
-
 # Capacitor
 android/app/google-services.json
 ios/App/GoogleService-Info.plist
@@ -31,7 +29,8 @@ __pycache__/
 *.log
 
 # Virtual Environment
-backend/env/
+backend/env/a
 env/
 venv/
 ENV/
+.venv-catalog/
