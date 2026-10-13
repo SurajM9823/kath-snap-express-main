@@ -23,3 +23,15 @@ ios/App/GoogleService-Info.plist
 # OS
 .DS_Store
 Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Virtual Environment
+backend/env/
+env/
+venv/
+ENV/

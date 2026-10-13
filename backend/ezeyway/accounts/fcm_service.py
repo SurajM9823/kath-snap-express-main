@@ -49,7 +49,10 @@ class FCMService:
 
             if not service_account_path:
                 cwd = os.getcwd()
+                base_dir = getattr(settings, 'BASE_DIR', None)
                 base_paths = [
+                    os.path.join(base_dir, 'ezeyway-2f869-firebase-adminsdk-fbsvc-debfce4d35.json') if base_dir else None,
+                    os.path.join(cwd, 'ezeyway-2f869-firebase-adminsdk-fbsvc-debfce4d35.json'),
                     '/opt/ezeyway/secrets/ezeyway-firebase-adminsdk-new.json',
                     '/opt/ezeyway/kath-snap-express-main/backend/ezeyway/ezeyway-firebase-adminsdk-new.json',
                     os.path.join(cwd, 'ezeyway-firebase-adminsdk-new.json'),
