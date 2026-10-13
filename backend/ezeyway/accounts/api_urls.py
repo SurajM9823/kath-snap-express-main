@@ -8,6 +8,8 @@ from . import call_actions_api
 from . import call_status_api
 
 urlpatterns = [
+    path('catalog/products/', api_views.CustomerProductSearchView.as_view(), name='customer_catalog'),
+    path('catalog/products/<int:pk>/', api_views.CustomerProductDetailView.as_view(), name='customer_catalog_detail'),
     # Authentication
     path('register/', api_views.register_api, name='register'),
     path('login/', api_views.login_api, name='login'),

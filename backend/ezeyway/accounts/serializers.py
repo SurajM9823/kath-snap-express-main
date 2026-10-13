@@ -1,3 +1,4 @@
+from .catalog import customer_products
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
@@ -601,7 +602,7 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
 
 class VendorWalletSerializer(serializers.ModelSerializer):
     transactions = WalletTransactionSerializer(many=True, read_only=True)
-    business_name = serializers.CharField(source='vendor.business_name', read_only=True)
+    business_name = serializers.CharField(source='vendor.business_name', read_only=True, default=None)
     
     class Meta:
         model = VendorWallet
@@ -616,16 +617,16 @@ class AddMoneySerializer(serializers.Serializer):
 
 class CustomerProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
-    vendor_name = serializers.CharField(source='vendor.business_name', read_only=True)
-    vendor_id = serializers.IntegerField(source='vendor.id', read_only=True)
-    vendor_latitude = serializers.FloatField(source='vendor.latitude', read_only=True)
-    vendor_longitude = serializers.FloatField(source='vendor.longitude', read_only=True)
+    vendor_name = serializers.CharField(source='vendor.business_name', read_only=True, default=None)
+    vendor_id = serializers.IntegerField(source='vendor.id', read_only=True, default=None)
+    vendor_latitude = serializers.FloatField(source='vendor.latitude', read_only=True, default=None)
+    vendor_longitude = serializers.FloatField(source='vendor.longitude', read_only=True, default=None)
     
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'category', 'subcategory', 'price', 'quantity',
-            'description', 'short_description', 'tags', 'featured', 'free_delivery',
+            'description', 'short_description', 'tags', 'is_universal', 'featured', 'free_delivery',
             'custom_delivery_fee_enabled', 'custom_delivery_fee', 'dynamic_fields', 'images',
             'vendor_name', 'vendor_id', 'vendor_latitude', 'vendor_longitude', 'created_at'
         ]
@@ -654,7 +655,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     
     def validate_product_id(self, value):
         try:
-            product = Product.objects.get(id=value, status='active')
+            product = customer_products().get(id=value)
             return value
         except Product.DoesNotExist:
             raise serializers.ValidationError('Product not found or inactive')
@@ -665,14 +666,29 @@ class CartItemSerializer(serializers.ModelSerializer):
         return value
 
 class CartSerializer(serializers.ModelSerializer):
-    items = CartItemSerializer(many=True, read_only=True)
-    total_items = serializers.IntegerField(read_only=True)
-    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    
+    items = serializers.SerializerMethodField()
+    total_items = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+
+    def visible_items(self, obj):
+        if not hasattr(self, '_catalog_items'):
+            self._catalog_items = list(obj.items.filter(product__in=customer_products()).select_related('product').prefetch_related('product__images'))
+        return self._catalog_items
+
+    def get_items(self, obj):
+        return CartItemSerializer(self.visible_items(obj), many=True, context=self.context).data
+
+    def get_total_items(self, obj):
+        return sum(item.quantity for item in self.visible_items(obj))
+
+    def get_subtotal(self, obj):
+        from decimal import Decimal
+        return str(sum((item.total_price for item in self.visible_items(obj)), Decimal('0.00')))
+
     class Meta:
         model = Cart
         fields = ['id', 'items', 'total_items', 'subtotal', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = fields
 
 # Import order serializers
 from .order_serializers import *

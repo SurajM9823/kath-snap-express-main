@@ -1,4 +1,5 @@
 from django.urls import path
+from . import catalog_admin
 from . import views
 from . import parameter_ajax_views
 from . import call_api_views
@@ -6,6 +7,8 @@ from . import call_actions_api
 from django.views.decorators.csrf import csrf_exempt
 
 urlpatterns = [
+    path('superadmin/products/', catalog_admin.manage_universal_products, name='manage_universal_products'),
+    path('superadmin/products/<int:product_id>/', catalog_admin.manage_universal_products, name='edit_universal_product'),
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),

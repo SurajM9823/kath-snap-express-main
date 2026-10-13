@@ -275,7 +275,9 @@ class Product(models.Model):
         ('archived', 'Archived'),
     ]
     
-    vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='products')
+    # Universal products belong to the platform; vendor inventory remains private to POS.
+    is_universal = models.BooleanField(default=False, db_index=True)
+    vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
     subcategory = models.CharField(max_length=100, blank=True, null=True)
@@ -300,8 +302,17 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.name} - {self.vendor.business_name}"
+        return f"{self.name} - {'Universal catalog' if self.is_universal else self.vendor.business_name}"
     
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(is_universal=True, vendor__isnull=True) |
+                           models.Q(is_universal=False, vendor__isnull=False)),
+                name='product_catalog_ownership',
+            ),
+        ]
+
     @property
     def total_sold(self):
         """Calculate total sold from completed orders.
@@ -323,7 +334,7 @@ class Product(models.Model):
             return 0
 
 def product_image_upload_path(instance, filename):
-    return f'products/{instance.product.vendor.id}/{filename}'
+    return f'products/{instance.product.vendor_id or "universal"}/{filename}'
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')

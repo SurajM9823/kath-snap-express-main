@@ -1,0 +1,39 @@
+{% extends 'accounts/superadmin_base.html' %}
+{% block title %}Universal products{% endblock %}
+{% block content %}
+<h1 class="mt-4">Universal products</h1>
+<p>Manage the customer catalog. Vendor inventory stays in POS. Featured products appear in the customer featured collection.</p>
+<div class="row">
+  <section class="col-lg-5">
+    <h2>{% if editing %}Edit product{% else %}Add product{% endif %}</h2>
+    <form method="post" enctype="multipart/form-data" class="card card-body">
+      {% csrf_token %}
+      {{ form.as_p }}
+      {% if editing %}
+        {% for image in product.images.all %}
+          <label><img src="{{ image.image.url }}" alt="{{ product.name }}" width="80">
+            <input type="checkbox" name="remove_images" value="{{ image.pk }}"> Remove image
+          </label>
+        {% endfor %}
+      {% endif %}
+      <button class="btn btn-primary" type="submit">Save product</button>
+      {% if editing %}<a href="{% url 'manage_universal_products' %}">Cancel editing</a>{% endif %}
+    </form>
+  </section>
+  <section class="col-lg-7">
+    <h2>Catalog</h2>
+    <p>Use Draft to prepare a product or Archived to remove it from customer browsing.</p>
+    <form method="get"><input name="search" value="{{ request.GET.search }}" aria-label="Search products"><button type="submit">Search</button></form>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Product</th><th>Price</th><th>Status</th><th>Featured</th><th></th></tr></thead>
+      <tbody>{% for item in products %}<tr>
+        <td>{{ item.name }}</td><td>{{ item.price }}</td><td>{{ item.get_status_display }}</td><td>{{ item.featured|yesno:'Yes,No' }}</td>
+        <td><a href="{% url 'edit_universal_product' item.pk %}">Edit</a></td>
+      </tr>{% empty %}<tr><td colspan="5">No universal products yet. Add your first product here.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if products.has_previous %}<a href="?page={{ products.previous_page_number }}&search={{ request.GET.search|urlencode }}">Previous</a>{% endif %}
+    <span>Page {{ products.number }} of {{ products.paginator.num_pages }}</span>
+    {% if products.has_next %}<a href="?page={{ products.next_page_number }}&search={{ request.GET.search|urlencode }}">Next</a>{% endif %}
+  </section>
+</div>
+{% endblock %}

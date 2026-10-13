@@ -1,3 +1,4 @@
+from .catalog import customer_products, filter_catalog
 from .featured_status import sync_featured_products, reschedule_paid_feature
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -1481,54 +1482,15 @@ class CustomerProductSearchView(generics.ListAPIView):
     pagination_class = SearchPagination
     
     def get_queryset(self):
-        print("\nPRODUCT SEARCH DEBUG - Starting query")
-        print(f"Query params: {dict(self.request.query_params)}")
-        
-        # Get current time and day for vendor availability check
-        current_time = timezone.now().time()
-        current_day = timezone.now().strftime('%A').lower()
-        current_date = timezone.now().date()
-        
-        # Initial filter with vendor online status
-        queryset = Product.objects.filter(
-            status='active',
-            vendor__is_approved=True
-        ).select_related('vendor').prefetch_related('images')
-        
-        # TEMPORARILY DISABLE BUSINESS HOURS FILTERING FOR TESTING
-        # Filter for online vendors only - simplified to just check is_active
-        online_vendors = []
-        for product in queryset:
-            vendor = product.vendor
-            # Only check if vendor is manually set to active, ignore business hours
-            if vendor.is_active:
-                online_vendors.append(product.id)
-        
-        queryset = queryset.filter(id__in=online_vendors)
-        
-        initial_count = queryset.count()
-        print(f"Initial products (active, approved, online vendors): {initial_count}")
-        
-        # Search query
-        search = self.request.query_params.get('search', '')
-        if search:
-            print(f"Applying search filter: '{search}'")
-            queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(category__icontains=search) |
-                Q(subcategory__icontains=search) |
-                Q(tags__icontains=search) |
-                Q(vendor__business_name__icontains=search)
-            )
-            search_count = queryset.count()
-            print(f"After search filter: {search_count} products")
-        
-        final_count = queryset.count()
-        print(f"Final result: {final_count} products")
-        print("PRODUCT SEARCH DEBUG - Complete\n")
-        
-        return queryset.order_by('-created_at')
+        return filter_catalog(self.request.query_params)
+
+class CustomerProductDetailView(generics.RetrieveAPIView):
+    serializer_class = CustomerProductSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return customer_products()
+
 
 class CustomerVendorSearchView(generics.ListAPIView):
     serializer_class = VendorProfileSerializer
@@ -1604,23 +1566,9 @@ class UserFavoriteListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        # Get current time and day for vendor availability check
-        current_time = timezone.now().time()
-        current_day = timezone.now().strftime('%A').lower()
-        current_date = timezone.now().date()
-        
-        queryset = UserFavorite.objects.filter(user=self.request.user)
-        
-        # TEMPORARILY DISABLE BUSINESS HOURS FILTERING FOR TESTING
-        # Filter out favorites from offline vendors - simplified to just check is_active
-        online_favorites = []
-        for favorite in queryset:
-            vendor = favorite.product.vendor
-            # Only check if vendor is manually set to active, ignore business hours
-            if vendor.is_active:
-                online_favorites.append(favorite.id)
-        
-        return queryset.filter(id__in=online_favorites)
+        return UserFavorite.objects.filter(
+            user=self.request.user, product__in=customer_products(),
+        ).select_related('product').prefetch_related('product__images')
 
 @csrf_exempt
 @api_view(['POST'])
@@ -1631,30 +1579,7 @@ def toggle_favorite_api(request):
         return Response({'error': 'Product ID is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        product = Product.objects.get(id=product_id)
-        favorite, created = UserFavorite.objects.get_or_create(
-            user=request.user,
-            product=product
-        )
-        
-        if not created:
-            favorite.delete()
-            return Response({
-                'is_favorite': False,
-                'message': 'Product removed from favorites'
-            })
-        else:
-            return Response({
-                'is_favorite': True,
-                'message': 'Product added to favorites'
-            })
-    except Product.DoesNotExist:
-        return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
-    if not product_id:
-        return Response({'error': 'Product ID is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        product = Product.objects.get(id=product_id)
+        product = customer_products().get(id=product_id)
         favorite, created = UserFavorite.objects.get_or_create(
             user=request.user,
             product=product
@@ -1680,23 +1605,6 @@ def toggle_favorite_api(request):
 def get_cart_api(request):
     cart, created = Cart.objects.get_or_create(user=request.user)
     
-    # TEMPORARILY DISABLE BUSINESS HOURS FILTERING FOR TESTING
-    # Filter out items from offline vendors - simplified to just check is_active
-    current_time = timezone.now().time()
-    current_day = timezone.now().strftime('%A').lower()
-    current_date = timezone.now().date()
-    
-    offline_items = []
-    for item in cart.items.all():
-        vendor = item.product.vendor
-        # Only check if vendor is manually set to active, ignore business hours
-        if not vendor.is_active:
-            offline_items.append(item.id)
-    
-    # Remove offline vendor items from cart
-    if offline_items:
-        CartItem.objects.filter(id__in=offline_items).delete()
-    
     serializer = CartSerializer(cart, context={'request': request})
     return Response(serializer.data)
 
@@ -1713,7 +1621,7 @@ def add_to_cart_api(request):
         return Response({'error': 'Product ID is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        product = Product.objects.get(id=product_id, status='active')
+        product = customer_products().get(id=product_id)
         
         # Check if item already exists in cart
         cart_item, created = CartItem.objects.get_or_create(
@@ -1738,7 +1646,7 @@ def add_to_cart_api(request):
 @permission_classes([permissions.IsAuthenticated])
 def update_cart_item_api(request, item_id):
     try:
-        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user)
+        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user, product__in=customer_products())
         quantity = request.data.get('quantity')
         
         if quantity is None:
@@ -1762,7 +1670,7 @@ def update_cart_item_api(request, item_id):
 @permission_classes([permissions.IsAuthenticated])
 def remove_from_cart_api(request, item_id):
     try:
-        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user)
+        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user, product__in=customer_products())
         cart_item.delete()
         
         cart = Cart.objects.get(user=request.user)
@@ -3038,28 +2946,8 @@ def image_search_api(request):
         # In a real implementation, you would use AI/ML for image recognition
         # This is a placeholder that returns random products for demo
         
-        # Get current time and day for vendor availability check
-        current_time = timezone.now().time()
-        current_day = timezone.now().strftime('%A').lower()
-        current_date = timezone.now().date()
-        
-        # Get active products from online vendors
-        queryset = Product.objects.filter(
-            status='active',
-            vendor__is_approved=True
-        ).select_related('vendor').prefetch_related('images')
-        
-        # TEMPORARILY DISABLE BUSINESS HOURS FILTERING FOR TESTING
-        # Filter for online vendors only - simplified to just check is_active
-        online_vendors = []
-        for product in queryset:
-            vendor = product.vendor
-            # Only check if vendor is manually set to active, ignore business hours
-            if vendor.is_active:
-                online_vendors.append(product.id)
-        
-        queryset = queryset.filter(id__in=online_vendors)
-        
+        queryset = customer_products()
+
         # For demo purposes, return first 10 products
         # In real implementation, use image recognition AI to find similar products
         results = queryset[:10]
@@ -3084,61 +2972,16 @@ def image_search_api(request):
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def search_products_api(request):
-    """Search products from approved online vendors, regardless of location"""
-    sync_featured_products()
-    print("\nPRODUCT SEARCH API DEBUG - Starting query")
-    print(f"Query params: {dict(request.query_params)}")
-
-    # Get current time and day for vendor availability check
-    current_time = timezone.now().time()
-    current_day = timezone.now().strftime('%A').lower()
-    current_date = timezone.now().date()
-
-    # Initial filter with vendor online status
-    queryset = Product.objects.filter(
-        status='active',
-        vendor__is_approved=True
-    ).select_related('vendor').prefetch_related('images')
-
-    # TEMPORARILY DISABLE BUSINESS HOURS FILTERING FOR TESTING
-    # Filter for online vendors only - simplified to just check is_active
-    online_vendors = []
-    for product in queryset:
-        vendor = product.vendor
-        # Only check if vendor is manually set to active, ignore business hours
-        if vendor.is_active:
-            online_vendors.append(product.id)
-
-    queryset = queryset.filter(id__in=online_vendors)
-
-    initial_count = queryset.count()
-    print(f"Initial products (active, approved, online vendors): {initial_count}")
-
-    # Search query
-    search = request.query_params.get('search', '')
-    if search:
-        print(f"Applying search filter: '{search}'")
-        queryset = queryset.filter(
-            Q(name__icontains=search) |
-            Q(description__icontains=search) |
-            Q(category__icontains=search) |
-            Q(subcategory__icontains=search) |
-            Q(tags__icontains=search) |
-            Q(vendor__business_name__icontains=search)
-        )
-        search_count = queryset.count()
-        print(f"After search filter: {search_count} products")
-
+    """Public universal catalog, independent of vendor availability."""
+    queryset = filter_catalog(request.query_params)
     final_count = queryset.count()
-    print(f"Final result: {final_count} products")
-    print("PRODUCT SEARCH API DEBUG - Complete\n")
-
-    # Pagination
-    page = int(request.query_params.get('page', 1))
-    page_size = int(request.query_params.get('page_size', 20))
+    try:
+        page = max(1, int(request.query_params.get('page', 1)))
+        page_size = min(100, max(1, int(request.query_params.get('page_size', 20))))
+    except (TypeError, ValueError):
+        return Response({'error': 'Invalid pagination'}, status=400)
     start_index = (page - 1) * page_size
-    end_index = start_index + page_size
-    paginated_queryset = queryset[start_index:end_index]
+    paginated_queryset = queryset[start_index:start_index + page_size]
 
     # Serialize results
     from .serializers import CustomerProductSerializer

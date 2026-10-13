@@ -13,7 +13,7 @@ def sync_featured_products(products=None):
     purchases = ProductFeaturedPurchase.objects.filter(product_id=OuterRef('pk'))
     current = purchases.filter(is_active=True, start_date__lte=today, end_date__gte=today)
     products = Product.objects.all() if products is None else products
-    managed = products.annotate(has_purchase=Exists(purchases), has_current=Exists(current)).filter(has_purchase=True)
+    managed = products.filter(is_universal=False).annotate(has_purchase=Exists(purchases), has_current=Exists(current)).filter(has_purchase=True)
     managed.filter(has_current=True, featured=False).update(featured=True)
     managed.filter(has_current=False, featured=True).update(featured=False)
 
