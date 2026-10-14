@@ -616,8 +616,8 @@ class AddMoneySerializer(serializers.Serializer):
     reference_id = serializers.CharField(max_length=100, required=False)
 
 class CustomerProductSerializer(serializers.ModelSerializer):
-    price = serializers.DecimalField(source='selling_price', max_digits=14, decimal_places=2, read_only=True)
-    base_price = serializers.DecimalField(source='price', max_digits=10, decimal_places=2, read_only=True)
+    price = serializers.SerializerMethodField()
+    base_price = serializers.SerializerMethodField()
     has_discount = serializers.BooleanField(read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     vendor_name = serializers.CharField(source='vendor.business_name', read_only=True, default=None)
@@ -638,6 +638,13 @@ class CustomerProductSerializer(serializers.ModelSerializer):
         fields.append('total_sold')
         read_only_fields = ['id', 'created_at', 'total_sold']
 
+    def get_price(self, obj):
+        return int(obj.selling_price)
+
+    def get_base_price(self, obj):
+        from decimal import ROUND_DOWN, Decimal
+        return int(Decimal(obj.price).quantize(Decimal('1'), rounding=ROUND_DOWN))
+
 class UserFavoriteSerializer(serializers.ModelSerializer):
     product = CustomerProductSerializer(read_only=True)
     
@@ -649,7 +656,7 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
 class CartItemSerializer(serializers.ModelSerializer):
     product = CustomerProductSerializer(read_only=True)
     product_id = serializers.IntegerField(write_only=True)
-    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_price = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = CartItem
@@ -685,8 +692,7 @@ class CartSerializer(serializers.ModelSerializer):
         return sum(item.quantity for item in self.visible_items(obj))
 
     def get_subtotal(self, obj):
-        from decimal import Decimal
-        return str(sum((item.total_price for item in self.visible_items(obj)), Decimal('0.00')))
+        return int(sum(item.total_price for item in self.visible_items(obj)))
 
     class Meta:
         model = Cart

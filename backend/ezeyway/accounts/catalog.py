@@ -1,7 +1,7 @@
 """The customer catalog never includes vendor POS inventory."""
 from decimal import Decimal
 from django.db.models import Q, F, Case, When, DecimalField
-from django.db.models.functions import Round
+from django.db.models.functions import Floor
 
 from .models import Product
 
@@ -29,10 +29,10 @@ def filter_catalog(params):
     # Legacy shop screens must not display universal products as a vendor's stock.
     if params.get('vendor_id') or params.get('vendor'):
         return products.none()
-    products = products.annotate(catalog_price=Round(Case(
+    products = products.annotate(catalog_price=Floor(Case(
         When(pricing_group__is_active=True, then=F('price') * (Decimal('1') + F('pricing_group__adjustment_percent') * Decimal('0.01'))),
         default=F('price'), output_field=DecimalField(max_digits=14, decimal_places=2),
-    ), precision=2))
+    )))
     ordering = {'price_asc': 'catalog_price', 'price_desc': '-catalog_price',
                 'price_low': 'catalog_price', 'price_high': '-catalog_price', 'newest': '-created_at'}
     if params.get('sort') in ordering:

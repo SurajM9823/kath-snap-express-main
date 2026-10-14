@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from .models import CustomUser, VendorProfile, Product
 
 class Order(models.Model):
@@ -133,6 +133,7 @@ class OrderItem(models.Model):
             self.product_name = self.product.name
             self.product_description = self.product.description
             self.vendor_name = self.product.vendor.business_name
+        self.unit_price = Decimal(self.unit_price).quantize(Decimal('1'), rounding=ROUND_DOWN)
         self.total_price = self.unit_price * self.quantity
         super().save(*args, **kwargs)
 

@@ -9,6 +9,8 @@ from .serializers import CustomerProductSerializer, UserSerializer
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_details = CustomerProductSerializer(source='product', read_only=True)
+    unit_price = serializers.IntegerField(read_only=True)
+    total_price = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = OrderItem
@@ -159,6 +161,12 @@ class OrderSerializer(serializers.ModelSerializer):
     # Computed fields
     can_be_cancelled = serializers.ReadOnlyField()
     can_be_reviewed = serializers.ReadOnlyField()
+    subtotal = serializers.IntegerField(read_only=True)
+    delivery_fee = serializers.IntegerField(read_only=True)
+    tax_amount = serializers.IntegerField(read_only=True)
+    discount_amount = serializers.IntegerField(read_only=True)
+    total_amount = serializers.IntegerField(read_only=True)
+    paid_amount = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Order

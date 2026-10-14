@@ -1,4 +1,4 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -342,11 +342,12 @@ class Product(models.Model):
         base = Decimal(self.price)
         if self.is_universal and self.pricing_group_id and self.pricing_group.is_active:
             base *= Decimal('1') + self.pricing_group.adjustment_percent / Decimal('100')
-        return base.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return base.quantize(Decimal('1'), rounding=ROUND_DOWN)
 
     @property
     def has_discount(self):
-        return self.selling_price < self.price
+        base_price = Decimal(self.price).quantize(Decimal('1'), rounding=ROUND_DOWN)
+        return self.selling_price < base_price
 
     @property
     def total_sold(self):
