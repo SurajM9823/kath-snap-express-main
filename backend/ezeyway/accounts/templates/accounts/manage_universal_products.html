@@ -1,29 +1,76 @@
 {% extends 'accounts/superadmin_base.html' %}
 {% block title %}Universal products{% endblock %}
+{% block extra_css %}
+<style>
+  .navbar .navbar-nav {flex-direction:row;align-items:center;gap:12px;}
+  .product-page-header {padding:28px 0 20px;}
+  .product-page-header h1 {font-size:1.8rem;font-weight:700;margin-bottom:8px;}
+  .product-section {background:#fff;border:1px solid #e1e7ee;border-radius:14px;padding:24px;margin-bottom:20px;}
+  .product-section h2,.catalog-panel h2 {font-size:1.15rem;font-weight:700;margin:0 0 8px;}
+  .product-section h3 {font-size:1rem;font-weight:600;}
+  .product-section .section-note {color:#64748b;font-size:.9rem;margin-bottom:20px;}
+  .product-field .form-label {font-weight:600;font-size:.9rem;}
+  .product-field .form-control,.product-field .form-select {border-radius:8px;min-height:42px;}
+  .product-field.has-errors .form-control,.product-field.has-errors .form-select {border-color:#dc3545;}
+  .attribute-heading {margin-top:24px;}
+  .attribute-empty {padding:16px;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;}
+  .attribute-options {padding:10px 14px;border:1px solid #ced4da;border-radius:8px;}
+  .attribute-options label {display:flex;align-items:center;gap:8px;padding:5px 0;}
+  .product-toggle {padding:14px 0 14px 2.5em;border-bottom:1px solid #edf0f4;}
+  .product-toggle .form-check-label {font-weight:600;}
+  .product-actions {display:flex;align-items:center;gap:16px;padding:8px 0 28px;}
+  .product-image {width:88px;height:88px;object-fit:cover;border-radius:10px;display:block;margin-bottom:8px;}
+  .catalog-panel {padding-top:8px;} .catalog-panel td {vertical-align:middle;font-size:.9rem;}
+  #product-form [hidden] {display:none!important;}
+  @media(max-width:575px){.product-layout{--bs-gutter-x:0;}.product-section{padding:18px;}.product-actions .btn{flex:1;}}
+</style>
+{% endblock %}
 {% block content %}
-<h1 class="mt-4">Universal products</h1>
-<p>Manage the customer catalog. Vendor inventory stays in POS. Featured products appear in the customer featured collection.</p>
-<div class="row">
-  <section class="col-lg-5">
-    <h2>{% if editing %}Edit product{% else %}Add product{% endif %}</h2>
-    <form method="post" enctype="multipart/form-data" class="card card-body">
+<header class="product-page-header"><h1>Universal products</h1><p class="text-muted mb-0">Create products for your customer catalog and choose what appears on the homepage.</p></header>
+<div class="row g-4 product-layout">
+  <section class="col-xl-8">
+    <form method="post" enctype="multipart/form-data" id="product-form">
       {% csrf_token %}
-      {{ form.as_p }}
-      {% if editing %}
-        {% for image in product.images.all %}
-          <label><img src="{{ image.image.url }}" alt="{{ product.name }}" width="80">
-            <input type="checkbox" name="remove_images" value="{{ image.pk }}"> Remove image
-          </label>
-        {% endfor %}
-      {% endif %}
-      <button class="btn btn-primary" type="submit">Save product</button>
-      {% if editing %}<a href="{% url 'manage_universal_products' %}">Cancel editing</a>{% endif %}
+      {% if form.errors %}<div class="alert alert-danger" role="alert">Please correct the highlighted fields below.{{ form.non_field_errors }}</div>{% endif %}
+      <div class="product-section">
+        <h2>{% if editing %}Edit product{% else %}Add a product{% endif %}</h2><p class="section-note">Start with a name and select from your existing categories.</p>
+        {% include 'accounts/product_form_field.html' with field=form.name %}
+        <div class="mt-3">{% include 'accounts/product_form_field.html' with field=form.category %}</div>
+        <div id="options-status" class="small text-muted mt-2" role="status" aria-live="polite"></div>
+        <button type="button" id="retry-options" class="btn btn-sm btn-outline-primary mt-2" hidden>Retry loading fields</button>
+        <fieldset id="category-options" class="mt-3">{% include 'accounts/product_attributes.html' %}</fieldset>
+      </div>
+      <div class="product-section"><h2>Pricing & stock</h2><p class="section-note">Set the selling price and available quantity.</p>
+        <div class="row g-3"><div class="col-md-6">{% include 'accounts/product_form_field.html' with field=form.price %}</div><div class="col-md-6">{% include 'accounts/product_form_field.html' with field=form.quantity %}</div></div>
+      </div>
+      <div class="product-section"><h2>Description & images</h2><p class="section-note">Help customers understand what they are buying.</p>
+        {% include 'accounts/product_form_field.html' with field=form.short_description %}
+        <div class="mt-3">{% include 'accounts/product_form_field.html' with field=form.description %}</div>
+        <div class="mt-3">{% include 'accounts/product_form_field.html' with field=form.tags %}</div>
+        <div class="mt-3">{% include 'accounts/product_form_field.html' with field=form.image %}</div>
+        <img id="upload-preview" class="product-image mt-3" alt="New product image preview" hidden>
+        {% if editing %}<div class="d-flex flex-wrap gap-3 mt-3">{% for image in product.images.all %}
+          <label><img src="{{ image.image.url }}" alt="{{ product.name }}" class="product-image"><input type="checkbox" name="remove_images" value="{{ image.pk }}"> Remove{% if image.is_primary %} <span class="badge bg-light text-dark">Primary</span>{% endif %}</label>
+        {% endfor %}</div>{% endif %}
+      </div>
+      <div class="product-section"><h2>Delivery</h2><p class="section-note">Choose free delivery or set a product-specific delivery fee.</p>
+        <div class="form-check form-switch product-toggle">{{ form.free_delivery }}<label class="form-check-label" for="id_free_delivery">Free delivery</label></div>
+        <div id="custom-delivery-toggle" class="form-check form-switch product-toggle">{{ form.custom_delivery_fee_enabled }}<label class="form-check-label" for="id_custom_delivery_fee_enabled">Set a custom delivery fee</label></div>
+        <div id="delivery-fee-field" class="mt-3">{% include 'accounts/product_form_field.html' with field=form.custom_delivery_fee %}</div>
+        <p id="delivery-note" class="form-text mt-3 mb-0"></p>
+      </div>
+      <div class="product-section"><h2>Visibility</h2><p class="section-note">Active products appear in the catalog. Keep unfinished products as drafts.</p>
+        {% include 'accounts/product_form_field.html' with field=form.status %}
+        <div class="form-check form-switch product-toggle mt-2">{{ form.featured }}<label class="form-check-label" for="id_featured">Feature on the homepage</label><div class="form-text">Only active products can appear in the featured collection.</div></div>
+      </div>
+      <div class="product-actions"><button class="btn btn-primary px-4 py-2" id="save-product" type="submit">{% if editing %}Save changes{% else %}Save product{% endif %}</button>{% if editing %}<a href="{% url 'manage_universal_products' %}">Cancel</a>{% endif %}</div>
+      <noscript><p class="alert alert-warning">Enable JavaScript to load category fields and manage delivery options.</p></noscript>
     </form>
   </section>
-  <section class="col-lg-7">
-    <h2>Catalog</h2>
+  <section class="col-xl-4 catalog-panel">
+    <h2>Your catalog</h2>
     <p>Use Draft to prepare a product or Archived to remove it from customer browsing.</p>
-    <form method="get"><input name="search" value="{{ request.GET.search }}" aria-label="Search products"><button type="submit">Search</button></form>
+    <form method="get"><input class="form-control" placeholder="Search products" name="search" value="{{ request.GET.search }}" aria-label="Search products"><button class="btn btn-outline-primary mt-2" type="submit">Search</button></form>
     <div class="table-responsive"><table class="table">
       <thead><tr><th>Product</th><th>Price</th><th>Status</th><th>Featured</th><th></th></tr></thead>
       <tbody>{% for item in products %}<tr>
@@ -36,4 +83,107 @@
     {% if products.has_next %}<a href="?page={{ products.next_page_number }}&search={{ request.GET.search|urlencode }}">Next</a>{% endif %}
   </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  const form = document.getElementById('product-form');
+  const category = document.getElementById('id_category');
+  const options = document.getElementById('category-options');
+  const status = document.getElementById('options-status');
+  const retry = document.getElementById('retry-options');
+  const save = document.getElementById('save-product');
+  const cache = new Map();
+  let currentKey = JSON.stringify([category.value, document.getElementById('id_subcategory').value]);
+  let sequence = 0;
+  let controller;
+  let loading = false;
+  let failed = false;
+  function remember() {
+    if (loading || failed) return;
+    const values = new Map();
+    options.querySelectorAll('[name^="attribute_"]').forEach(input => {
+      if (!values.has(input.name)) values.set(input.name, []);
+      if (input.type !== 'checkbox' || input.checked) values.get(input.name).push(input.value);
+    });
+    cache.set(currentKey, values);
+  }
+  async function loadOptions() {
+    remember();
+    const subcategory = document.getElementById('id_subcategory').value;
+    const key = JSON.stringify([category.value, subcategory]);
+    const requestId = ++sequence;
+    if (controller) controller.abort();
+    controller = new AbortController();
+    loading = true; failed = false;
+    options.disabled = true;
+    options.setAttribute('aria-busy', 'true');
+    save.disabled = true; retry.hidden = true;
+    status.textContent = 'Loading category fields...';
+    const url = new URL(window.location.href);
+    url.search = new URLSearchParams({form_options: '1', category: category.value, subcategory}).toString();
+    try {
+      const response = await fetch(url, {signal: controller.signal, credentials: 'same-origin'});
+      if (!response.ok || response.redirected) throw new Error('Unable to load category fields.');
+      const html = await response.text();
+      if (requestId !== sequence) return;
+      const fragment = document.createElement('template');
+      fragment.innerHTML = html;
+      if (!fragment.content.querySelector('#id_subcategory')) throw new Error('Invalid category response.');
+      options.replaceChildren(fragment.content.cloneNode(true));
+      const values = cache.get(key) ?? (JSON.parse(currentKey)[0] === category.value ? cache.get(currentKey) : undefined);
+      if (values) options.querySelectorAll('[name^="attribute_"]').forEach(input => {
+        if (!values.has(input.name)) return;
+        if (input.type === 'checkbox') input.checked = values.get(input.name).includes(input.value);
+        else input.value = values.get(input.name)[0] ?? '';
+      });
+      currentKey = JSON.stringify([category.value, document.getElementById('id_subcategory').value]);
+      status.textContent = 'Category fields are up to date.';
+      options.disabled = false; save.disabled = false;
+    } catch (error) {
+      if (requestId !== sequence) return;
+      failed = true;
+      status.textContent = 'Could not load fields. Retry before saving the product.';
+      retry.hidden = false;
+    } finally {
+      if (requestId === sequence) {loading = false; options.setAttribute('aria-busy', 'false');}
+    }
+  }
+  category.addEventListener('change', () => {
+    remember();
+    document.getElementById('id_subcategory').value = '';
+    loadOptions();
+  });
+  options.addEventListener('change', event => {if (event.target.id === 'id_subcategory') loadOptions();});
+  retry.addEventListener('click', loadOptions);
+  form.addEventListener('submit', event => {if (loading || failed) event.preventDefault();});
+
+  const free = document.getElementById('id_free_delivery');
+  const custom = document.getElementById('id_custom_delivery_fee_enabled');
+  const fee = document.getElementById('id_custom_delivery_fee');
+  function updateDelivery() {
+    if (free.checked) custom.checked = false;
+    custom.disabled = free.checked;
+    document.getElementById('custom-delivery-toggle').hidden = free.checked;
+    const show = !free.checked && custom.checked;
+    document.getElementById('delivery-fee-field').hidden = !show;
+    fee.disabled = !show; fee.required = show;
+    document.getElementById('delivery-note').textContent = free.checked
+      ? 'This product has free delivery.' : show
+        ? 'This fee applies to this product.' : 'No product-specific delivery fee is set.';
+  }
+  free.addEventListener('change', updateDelivery);
+  custom.addEventListener('change', updateDelivery);
+  updateDelivery();
+  let previewUrl;
+  document.getElementById('id_image').addEventListener('change', event => {
+    const preview = document.getElementById('upload-preview');
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const file = event.target.files[0];
+    preview.hidden = !file || !file.type.startsWith('image/');
+    if (!preview.hidden) {previewUrl = URL.createObjectURL(file); preview.src = previewUrl;}
+  });
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,6 @@
+{% include 'accounts/product_form_field.html' with field=form.subcategory %}
+<div class="attribute-heading"><h3>Product details</h3><p class="text-muted small">Fields configured for the selected category and subcategory.</p></div>
+<div class="row g-3" id="attribute-inputs">
+  {% for field in form.attribute_fields %}<div class="col-md-6">{% include 'accounts/product_form_field.html' %}</div>
+  {% empty %}<div class="col-12"><div class="attribute-empty">No additional fields for this selection. Choose a category above or configure fields in <a href="{% url 'manage_categories' %}">Categories</a>.</div></div>{% endfor %}
+</div>
