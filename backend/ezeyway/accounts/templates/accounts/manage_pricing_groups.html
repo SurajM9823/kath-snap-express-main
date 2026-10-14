@@ -1,0 +1,69 @@
+{% extends 'accounts/superadmin_base.html' %}
+{% block title %}Product pricing groups{% endblock %}
+{% block extra_css %}
+<style>
+.pricing-card{background:white;border:1px solid #e1e7ee;border-radius:12px;padding:24px;margin-bottom:20px}
+.product-choices{max-height:380px;overflow:auto;border:1px solid #dee2e6;border-radius:8px;padding:12px}
+.product-choices label{display:flex;gap:10px;align-items:center;padding:8px;overflow-wrap:anywhere}
+.pricing-card h2{font-size:1.25rem}.navbar .navbar-nav{flex-direction:row;align-items:center;gap:12px}
+@media(max-width:575px){.pricing-layout{--bs-gutter-x:0}.pricing-card{padding:18px}}
+</style>
+{% endblock %}
+{% block content %}
+<h1 class="mt-4">Product pricing groups</h1>
+<p class="text-muted">Select products and adjust their base prices by a percentage. Each product can belong to one group. Base prices are never overwritten.</p>
+<div class="row pricing-layout">
+  <div class="col-lg-7"><form method="post" class="pricing-card" id="pricing-form">
+    {% csrf_token %}<h2>{% if editing %}Edit group{% else %}Create a pricing group{% endif %}</h2>
+    {{ form.non_field_errors }}
+    {% include 'accounts/product_form_field.html' with field=form.name %}
+    <div class="row mt-3 g-3">
+      <div class="col-sm-6">{% include 'accounts/product_form_field.html' with field=form.direction %}</div>
+      <div class="col-sm-6">{% include 'accounts/product_form_field.html' with field=form.percentage %}</div>
+    </div>
+    <div class="alert alert-info mt-3" id="price-example" aria-live="polite">Adjustments are calculated from each product's base price, not from a previously adjusted price.</div>
+    <div class="form-check my-3">{{ form.is_active }}<label for="id_is_active" class="form-check-label">Enable this group's prices</label></div>
+    <p class="small text-muted">Disabling the group restores its products' base prices. Decreases can be 0–100%; increases can be 0–1000%. Prices are rounded to two decimal places.</p>
+    <label for="product-search" class="form-label">Find products</label>
+    <input id="product-search" type="search" class="form-control mb-2" placeholder="Search by product or category">
+    <div class="d-flex flex-wrap gap-2 mb-3"><button type="button" id="select-visible" class="btn btn-sm btn-outline-primary">Select visible</button><button type="button" id="clear-visible" class="btn btn-sm btn-outline-secondary">Unselect visible</button><span id="selection-count" class="small align-self-center" aria-live="polite"></span></div>
+    {% include 'accounts/product_form_field.html' with field=form.products %}
+    <p class="small text-muted mt-2">Products assigned to another group are excluded. Remove them from that group first to move them here. Unchecking a product restores its base price.</p>
+    <button class="btn btn-primary" type="submit">Save pricing group</button>
+    {% if editing %}<a class="btn btn-link" href="{% url 'manage_pricing_groups' %}">Create another group</a>{% endif %}
+  </form></div>
+  <div class="col-lg-5"><section class="pricing-card"><h2>Pricing groups</h2>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Name</th><th>Change</th><th>Products</th><th>Status</th></tr></thead>
+      <tbody>{% for group in groups %}<tr><td><a href="{% url 'edit_pricing_group' group.pk %}">{{ group.name }}</a></td><td>{% if group.adjustment_percent > 0 %}+{% endif %}{{ group.adjustment_percent }}%</td><td>{{ group.product_count }}</td><td>{{ group.is_active|yesno:'Active,Disabled' }}</td></tr>{% empty %}<tr><td colspan="4">No groups yet. Create your first group to adjust prices.</td></tr>{% endfor %}</tbody>
+    </table></div><a href="{% url 'manage_universal_products' %}">Manage product base prices</a>
+  </section></div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(() => {
+ const choices = [...document.querySelectorAll('#id_products input[type="checkbox"]')];
+ const count = document.getElementById('selection-count');
+ const updateCount = () => count.textContent = `${choices.filter(input => input.checked).length} selected`;
+ choices.forEach(input => input.addEventListener('change', updateCount));
+ document.getElementById('product-search').addEventListener('input', event => {
+   const query = event.target.value.toLowerCase().trim();
+   choices.forEach(input => {const row = input.closest('label').parentElement; row.hidden = !row.textContent.toLowerCase().includes(query);});
+ });
+ for (const [id, value] of [['select-visible', true], ['clear-visible', false]]) {
+   document.getElementById(id).addEventListener('click', () => {choices.filter(input => !input.closest('label').parentElement.hidden).forEach(input => input.checked = value); updateCount();});
+ }
+ const direction = document.getElementById('id_direction');
+ const percent = document.getElementById('id_percentage');
+ function preview() {
+   percent.max = direction.value === 'decrease' ? '100' : '1000';
+   const value = Number(percent.value);
+   document.getElementById('price-example').textContent = !percent.value || !Number.isFinite(value) || value < 0 || value > Number(percent.max)
+     ? 'Enter a valid percentage to preview the change.'
+     : `Example: base NPR 100.00 → selling NPR ${(100 * (1 + value / 100 * (direction.value === 'decrease' ? -1 : 1))).toFixed(2)}. Changes apply when you save.`;
+ }
+ direction.addEventListener('change', preview); percent.addEventListener('input', preview);
+ updateCount(); preview();
+})();
+</script>
+{% endblock %}

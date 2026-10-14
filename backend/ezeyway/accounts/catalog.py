@@ -1,11 +1,13 @@
 """The customer catalog never includes vendor POS inventory."""
-from django.db.models import Q
+from decimal import Decimal
+from django.db.models import Q, F, Case, When, DecimalField
+from django.db.models.functions import Round
 
 from .models import Product
 
 
 def customer_products():
-    return Product.objects.filter(is_universal=True, status='active').prefetch_related('images').order_by('-created_at', '-pk')
+    return Product.objects.filter(is_universal=True, status='active').select_related('pricing_group').prefetch_related('images').order_by('-created_at', '-pk')
 
 
 def filter_catalog(params):
@@ -27,7 +29,12 @@ def filter_catalog(params):
     # Legacy shop screens must not display universal products as a vendor's stock.
     if params.get('vendor_id') or params.get('vendor'):
         return products.none()
-    ordering = {'price_asc': 'price', 'price_desc': '-price', 'newest': '-created_at'}
+    products = products.annotate(catalog_price=Round(Case(
+        When(pricing_group__is_active=True, then=F('price') * (Decimal('1') + F('pricing_group__adjustment_percent') * Decimal('0.01'))),
+        default=F('price'), output_field=DecimalField(max_digits=14, decimal_places=2),
+    ), precision=2))
+    ordering = {'price_asc': 'catalog_price', 'price_desc': '-catalog_price',
+                'price_low': 'catalog_price', 'price_high': '-catalog_price', 'newest': '-created_at'}
     if params.get('sort') in ordering:
         products = products.order_by(ordering[params['sort']], '-pk')
     return products

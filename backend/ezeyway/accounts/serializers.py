@@ -616,6 +616,9 @@ class AddMoneySerializer(serializers.Serializer):
     reference_id = serializers.CharField(max_length=100, required=False)
 
 class CustomerProductSerializer(serializers.ModelSerializer):
+    price = serializers.DecimalField(source='selling_price', max_digits=14, decimal_places=2, read_only=True)
+    base_price = serializers.DecimalField(source='price', max_digits=10, decimal_places=2, read_only=True)
+    has_discount = serializers.BooleanField(read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     vendor_name = serializers.CharField(source='vendor.business_name', read_only=True, default=None)
     vendor_id = serializers.IntegerField(source='vendor.id', read_only=True, default=None)
@@ -625,7 +628,7 @@ class CustomerProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'category', 'subcategory', 'price', 'quantity',
+            'id', 'name', 'category', 'subcategory', 'price', 'base_price', 'has_discount', 'quantity',
             'description', 'short_description', 'tags', 'is_universal', 'featured', 'free_delivery',
             'custom_delivery_fee_enabled', 'custom_delivery_fee', 'dynamic_fields', 'images',
             'vendor_name', 'vendor_id', 'vendor_latitude', 'vendor_longitude', 'created_at'
@@ -672,7 +675,7 @@ class CartSerializer(serializers.ModelSerializer):
 
     def visible_items(self, obj):
         if not hasattr(self, '_catalog_items'):
-            self._catalog_items = list(obj.items.filter(product__in=customer_products()).select_related('product').prefetch_related('product__images'))
+            self._catalog_items = list(obj.items.filter(product__in=customer_products()).select_related('product__pricing_group').prefetch_related('product__images'))
         return self._catalog_items
 
     def get_items(self, obj):

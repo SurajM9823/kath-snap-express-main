@@ -256,7 +256,7 @@ class CreateOrderSerializer(serializers.Serializer):
                 }
             
             quantity = int(item_data['quantity'])
-            unit_price = item_data.get('unit_price', product.price)
+            unit_price = product.selling_price
             total_price = unit_price * quantity
             
             vendor_items[vendor_id]['items'].append({

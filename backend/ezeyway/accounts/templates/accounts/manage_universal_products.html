@@ -40,7 +40,7 @@
         <button type="button" id="retry-options" class="btn btn-sm btn-outline-primary mt-2" hidden>Retry loading fields</button>
         <fieldset id="category-options" class="mt-3">{% include 'accounts/product_attributes.html' %}</fieldset>
       </div>
-      <div class="product-section"><h2>Pricing & stock</h2><p class="section-note">Set the selling price and available quantity.</p>
+      <div class="product-section"><h2>Pricing & stock</h2><p class="section-note">Set the base price and available quantity. Pricing groups adjust the customer selling price.</p>
         <div class="row g-3"><div class="col-md-6">{% include 'accounts/product_form_field.html' with field=form.price %}</div><div class="col-md-6">{% include 'accounts/product_form_field.html' with field=form.quantity %}</div></div>
       </div>
       <div class="product-section"><h2>Description & images</h2><p class="section-note">Help customers understand what they are buying.</p>
@@ -72,9 +72,9 @@
     <p>Use Draft to prepare a product or Archived to remove it from customer browsing.</p>
     <form method="get"><input class="form-control" placeholder="Search products" name="search" value="{{ request.GET.search }}" aria-label="Search products"><button class="btn btn-outline-primary mt-2" type="submit">Search</button></form>
     <div class="table-responsive"><table class="table">
-      <thead><tr><th>Product</th><th>Price</th><th>Status</th><th>Featured</th><th></th></tr></thead>
+      <thead><tr><th>Product</th><th>Base / Selling</th><th>Status</th><th>Featured</th><th></th></tr></thead>
       <tbody>{% for item in products %}<tr>
-        <td>{{ item.name }}</td><td>{{ item.price }}</td><td>{{ item.get_status_display }}</td><td>{{ item.featured|yesno:'Yes,No' }}</td>
+        <td>{{ item.name }}</td><td>{{ item.price }} / <strong>{{ item.selling_price }}</strong></td><td>{{ item.get_status_display }}</td><td>{{ item.featured|yesno:'Yes,No' }}</td>
         <td><a href="{% url 'edit_universal_product' item.pk %}">Edit</a></td>
       </tr>{% empty %}<tr><td colspan="5">No universal products yet. Add your first product here.</td></tr>{% endfor %}</tbody>
     </table></div>

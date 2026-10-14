@@ -1568,7 +1568,7 @@ class UserFavoriteListView(generics.ListAPIView):
     def get_queryset(self):
         return UserFavorite.objects.filter(
             user=self.request.user, product__in=customer_products(),
-        ).select_related('product').prefetch_related('product__images')
+        ).select_related('product__pricing_group').prefetch_related('product__images')
 
 @csrf_exempt
 @api_view(['POST'])

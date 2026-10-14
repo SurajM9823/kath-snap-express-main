@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -268,6 +270,27 @@ class VendorChangeRequest(models.Model):
     def __str__(self):
         return f"{self.change_type} request for {self.vendor_profile.business_name}"
 
+class PricingGroup(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    adjustment_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal('-100')), MaxValueValidator(Decimal('1000'))],
+        help_text='Negative percentages discount the base price; positive percentages increase it.',
+    )
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [models.CheckConstraint(
+            condition=models.Q(adjustment_percent__gte=-100, adjustment_percent__lte=1000),
+            name='pricing_group_percentage_range',
+        )]
+
+    def __str__(self):
+        return self.name
+
+
 class Product(models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -277,6 +300,7 @@ class Product(models.Model):
     
     # Universal products belong to the platform; vendor inventory remains private to POS.
     is_universal = models.BooleanField(default=False, db_index=True)
+    pricing_group = models.ForeignKey(PricingGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name='products')
     vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
@@ -312,6 +336,17 @@ class Product(models.Model):
                 name='product_catalog_ownership',
             ),
         ]
+
+    @property
+    def selling_price(self):
+        base = Decimal(self.price)
+        if self.is_universal and self.pricing_group_id and self.pricing_group.is_active:
+            base *= Decimal('1') + self.pricing_group.adjustment_percent / Decimal('100')
+        return base.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def has_discount(self):
+        return self.selling_price < self.price
 
     @property
     def total_sold(self):
@@ -501,7 +536,7 @@ class CartItem(models.Model):
     
     @property
     def total_price(self):
-        return self.product.price * self.quantity
+        return self.product.selling_price * self.quantity
 
 @receiver(post_save, sender=CustomUser)
 def create_auth_token(sender, instance=None, created=False, **kwargs):

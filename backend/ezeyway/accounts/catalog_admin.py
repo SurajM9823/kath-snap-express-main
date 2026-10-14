@@ -29,7 +29,7 @@ class UniversalProductForm(forms.ModelForm):
             'quantity': forms.NumberInput(attrs={'min': 0, 'step': 1}),
             'custom_delivery_fee': forms.NumberInput(attrs={'min': 0, 'step': '0.01'}),
         }
-        labels = {'price': 'Price (NPR)', 'quantity': 'Available stock',
+        labels = {'price': 'Base price (NPR)', 'quantity': 'Available stock',
                   'custom_delivery_fee_enabled': 'Set a custom delivery fee',
                   'custom_delivery_fee': 'Delivery fee (NPR)', 'featured': 'Feature on the homepage'}
 
@@ -170,7 +170,7 @@ def manage_universal_products(request, product_id=None):
                 first_image.is_primary = True
                 first_image.save(update_fields=['is_primary'])
         return redirect('manage_universal_products')
-    products = Product.objects.filter(is_universal=True).order_by('-created_at', '-pk')
+    products = Product.objects.filter(is_universal=True).select_related('pricing_group').order_by('-created_at', '-pk')
     if request.GET.get('search'):
         products = products.filter(name__icontains=request.GET['search'])
     return render(request, 'accounts/manage_universal_products.html', {
