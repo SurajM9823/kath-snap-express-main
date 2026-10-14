@@ -26,6 +26,9 @@
     <p class="small text-muted">Disabling the group restores its products' base prices. Decreases can be 0–100%; increases can be 0–1000%. Prices are rounded to two decimal places.</p>
     <label for="product-search" class="form-label">Find products</label>
     <input id="product-search" type="search" class="form-control mb-2" placeholder="Search by product or category">
+    <div class="form-check mb-2"><input type="checkbox" id="featured-only" class="form-check-input"><label for="featured-only" class="form-check-label">Show featured products only</label></div>
+    <button type="button" id="select-featured" class="btn btn-sm btn-outline-primary mb-2">Select all featured</button>
+    <p class="small text-muted">Select all featured includes every eligible featured product, even outside the current search. Your other selections are kept.</p>
     <div class="d-flex flex-wrap gap-2 mb-3"><button type="button" id="select-visible" class="btn btn-sm btn-outline-primary">Select visible</button><button type="button" id="clear-visible" class="btn btn-sm btn-outline-secondary">Unselect visible</button><span id="selection-count" class="small align-self-center" aria-live="polite"></span></div>
     {% include 'accounts/product_form_field.html' with field=form.products %}
     <p class="small text-muted mt-2">Products assigned to another group are excluded. Remove them from that group first to move them here. Unchecking a product restores its base price.</p>
@@ -46,9 +49,20 @@
  const count = document.getElementById('selection-count');
  const updateCount = () => count.textContent = `${choices.filter(input => input.checked).length} selected`;
  choices.forEach(input => input.addEventListener('change', updateCount));
- document.getElementById('product-search').addEventListener('input', event => {
-   const query = event.target.value.toLowerCase().trim();
-   choices.forEach(input => {const row = input.closest('label').parentElement; row.hidden = !row.textContent.toLowerCase().includes(query);});
+ const search = document.getElementById('product-search');
+ const featuredOnly = document.getElementById('featured-only');
+ function filterProducts() {
+   const query = search.value.toLowerCase().trim();
+   choices.forEach(input => {
+     const row = input.closest('label').parentElement;
+     row.hidden = !row.textContent.toLowerCase().includes(query) || (featuredOnly.checked && input.dataset.featured !== 'true');
+   });
+ }
+ search.addEventListener('input', filterProducts);
+ featuredOnly.addEventListener('change', filterProducts);
+ document.getElementById('select-featured').addEventListener('click', () => {
+   choices.filter(input => input.dataset.featured === 'true').forEach(input => input.checked = true);
+   updateCount();
  });
  for (const [id, value] of [['select-visible', true], ['clear-visible', false]]) {
    document.getElementById(id).addEventListener('click', () => {choices.filter(input => !input.closest('label').parentElement.hidden).forEach(input => input.checked = value); updateCount();});

@@ -10,9 +10,18 @@ from django.views.decorators.csrf import csrf_protect
 from .models import PricingGroup, Product
 
 
+class PricingProductCheckboxes(forms.CheckboxSelectMultiple):
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        if hasattr(value, 'instance'):
+            option['attrs']['data-featured'] = 'true' if value.instance.featured else 'false'
+        return option
+
+
 class PricingProductChoice(forms.ModelMultipleChoiceField):
     def label_from_instance(self, product):
-        return f'{product.name} — {product.category} — Base NPR {product.price}'
+        badge = ' [Featured]' if product.featured else ''
+        return f'{product.name}{badge} — {product.category} — Base NPR {product.price}'
 
 
 class PricingGroupForm(forms.ModelForm):
@@ -20,7 +29,7 @@ class PricingGroupForm(forms.ModelForm):
     percentage = forms.DecimalField(min_value=0, max_value=1000, max_digits=7, decimal_places=2,
                                     label='Percentage', widget=forms.NumberInput(attrs={'step': '0.01'}))
     products = PricingProductChoice(queryset=Product.objects.none(), required=False,
-                                   widget=forms.CheckboxSelectMultiple)
+                                   widget=PricingProductCheckboxes)
 
     class Meta:
         model = PricingGroup
